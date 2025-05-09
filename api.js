@@ -1,6 +1,7 @@
 const express = require("express");
 const db = require("./dbConfig/db");
 const logger = require("./logger");
+const dotenv = require("dotenv");
 
 const app = express();
 
@@ -10,7 +11,7 @@ const blogRouter = require("./routes/blogRoute");
 
 db.connectToMongoDB();
 
-const port = 3001;
+const port = 3001 || process.env.PORT;
 
 //// app use
 app.use(express.json()); // parse application/json

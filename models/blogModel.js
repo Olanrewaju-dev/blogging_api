@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const bcrypt = require("bcrypt");
+// const bcrypt = require("bcrypt");
 
 const Schema = mongoose.Schema;
 const BlogSchema = new Schema({
@@ -12,8 +12,9 @@ const BlogSchema = new Schema({
     type: String,
     required: true,
   },
-  state: {
+  status: {
     type: String,
+    Enum: ["draft", "published"],
     default: "draft",
     required: true,
   },
@@ -28,13 +29,14 @@ const BlogSchema = new Schema({
     type: String,
   },
   tag: {
-    type: String,
+    type: Array,
+    default: [],
   },
-  description: {
+  excerpt: {
     type: String,
   },
 
-  // one-to-many association with task model
+  // one-to-many association with user model
   owner: [
     {
       type: Schema.Types.ObjectId,

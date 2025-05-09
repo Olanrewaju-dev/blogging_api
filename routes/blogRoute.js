@@ -1,6 +1,7 @@
 const express = require("express");
 const blogRouter = express.Router();
 const validation = require("../middlewares/validation");
+const userInputValidation = require("../middlewares/userInputValidation");
 const controller = require("../controllers/blogController");
 
 // fetch a list of blogs
@@ -13,7 +14,12 @@ blogRouter.get("/:id", controller.getABlog);
 blogRouter.post("/", validation.bearerTokenAuth, controller.blogSearch);
 
 //creating a blog
-blogRouter.post("/create", validation.bearerTokenAuth, controller.createBlog);
+blogRouter.post(
+  "/create",
+  validation.bearerTokenAuth,
+  userInputValidation.validBlogInput,
+  controller.createBlog
+);
 
 // updating blog
 blogRouter.post("/:id", validation.bearerTokenAuth, controller.updateBlog);

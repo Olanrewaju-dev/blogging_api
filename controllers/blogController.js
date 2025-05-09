@@ -7,21 +7,34 @@ const createBlog = async (req, res) => {
     const blogInput = req.body;
 
     // algorithm to calculate reading_time
-    const averageAdultReadingTime = 200;
-    const wordCount = blogInput.body.split(" ").length + 1;
+    const averageAdultReadingTime = 225;
+    const wordCount = blogInput.body.trim().split(/\s+/).length;
 
     const readingTime = await Math.round(wordCount / averageAdultReadingTime);
-    const blogAuthor = await req.user.firstname;
+
+    // checking if blog already exist
+    const existingBlog = await BlogModel.findOne({
+      title: blogInput.title,
+    });
+    if (existingBlog) {
+      return res.status(409).json({
+        message: "Blog already exist",
+        data: [],
+      });
+    }
+
+    // creating blog into mongoDB database
+    const blogAuthor = await req.user.username;
 
     const newBlogPost = await BlogModel.create({
       title: blogInput.title,
       body: blogInput.body,
-      state: blogInput.state,
+      status: blogInput.state,
       read_count: blogInput.read_count,
       reading_time: readingTime,
       author: blogAuthor,
       tag: blogInput.tag,
-      description: blogInput.description,
+      excerpt: blogInput.description,
       owner: req.user._id,
     });
 
@@ -29,20 +42,19 @@ const createBlog = async (req, res) => {
       logger.debug(
         "Internal server error. Cannot create blog post. Create blog route"
       );
-      res.status(500).json({
+      return res.status(500).json({
         message: "Internal server error. Cannot create blog post",
         data: [],
       });
     }
 
-    logger.debug("Blog created successfully");
     return res.status(201).json({
       message: "Blog created successfully", // success message
       data: newBlogPost,
     });
   } catch (error) {
     logger.error("Event error: ", error.message);
-    res.status(500).json({
+    return res.status(500).json({
       message: error.message,
       data: [],
     });
@@ -52,7 +64,7 @@ const createBlog = async (req, res) => {
 /// === fetching blogs === ///
 const getBlog = async (req, res) => {
   try {
-    // handling pagination, fetching limiting to 20 by default
+    // handling pagination, fetching limited to 20 by default
     let { page, size } = req.query;
     if (!page) {
       page = 1;
@@ -67,24 +79,20 @@ const getBlog = async (req, res) => {
       // handling db pagination
       const blogs = await BlogModel.find({}).limit(limit).skip(skip);
       if (!blogs) {
-        logger.debug(
-          "No blogs found in the database. Fetching all blogs route"
-        );
-        res.status(404).json({
+        return res.status(404).json({
           message: "No blogs found",
           data: [],
         });
       }
 
-      logger.debug("All blogs fetched successfully");
-      res.status(200).json({
+      return res.status(200).json({
         message: "Blogs fetched successfully",
         data: blogs,
       });
     }
   } catch (error) {
     logger.error("Event error: ", error.message);
-    res.status(400).json({
+    return res.status(400).json({
       message: error.message,
       data: [],
     });
@@ -94,24 +102,21 @@ const getBlog = async (req, res) => {
 /// === fetching a single blogs & increasing the read_count using mongoose $inc function === ///
 const getABlog = async (req, res) => {
   try {
-    const blogID = req.params.id;
+    const blogId = req.params.id;
 
     const singleBlog = await BlogModel.findOneAndUpdate(
-      { _id: blogID },
-      { $inc: { read_count: 1 } }
+      { _id: blogId },
+      { $inc: { read_count: 1 } },
+      { new: true }
     );
 
     if (!singleBlog) {
-      logger.debug(
-        "No blogs found in the database. Fetching a single blog route"
-      );
       return res.status(404).json({
-        message: "Blog not found",
+        message: "Blog not found.",
         data: [],
       });
     }
 
-    logger.debug("Single blog fetched successfully");
     return res.status(200).json({
       message: "Blog fetched successfully",
       data: singleBlog,
@@ -129,74 +134,61 @@ const getABlog = async (req, res) => {
 const updateBlog = async (req, res) => {
   try {
     const blogID = req.params.id;
+    const updateFields = req.body;
 
-    const newTitle = req.body.title;
-    const newBody = req.body.body;
-
-    if (blogID && newBody) {
-      const updateBody = await BlogModel.findOneAndUpdate(
-        {
-          _id: blogID,
-        },
-        {
-          $set: {
-            body: newBody,
-          },
-        }
-      );
-
-      if (!updateBody) {
-        logger.debug(
-          "Internal server error, cannot update blog body. Update blog route."
-        );
-        return res.status(500).json({
-          message: "Internal server error, cannot update blog body", // handling error
-          data: [],
-        });
-      }
-      logger.debug("Blog body updated successfully");
-      res.status(201).json({
-        message: "Blog body updated successfully",
-        data: updateBody,
-      });
-    } else if (blogID && newTitle) {
-      const updateTitle = await BlogModel.findByIdAndUpdate(
-        // updating blog title
-        { _id: blogID },
-        { $set: { title: newTitle } }
-      );
-
-      if (!updateTitle) {
-        logger.debug("Internal server error, cannot update blog title route.");
-        return res.status(500).json({
-          message: "Internal server error, cannot update blog tile", // handling error
-          data: [],
-        });
-      }
-      logger.debug("Blog title upated successfully");
-      res.status(201).json({
-        message: "Blog title upated successfully",
-        data: updateTitle,
-      });
-    } else if (blogID) {
-      const updateState = await BlogModel.findByIdAndUpdate(blogID, {
-        // updating blog state
-        state: "Published",
-      });
-
-      if (!updateState) {
-        return res.status(500).json({
-          message: "Internal server error, cannot update blog state",
-          data: [],
-        });
-      }
-
-      logger.debug("Blog state updated successfully");
-      res.status(201).json({
-        message: "Blog state updated successfully",
-        data: updateState,
+    if (!blogID || Object.keys(updateFields).length === 0) {
+      return res.status(400).json({
+        message: "Invalid request. Blog ID and update fields are required.",
+        data: [],
       });
     }
+
+    // Find the blog and ensure it belongs to the requesting user
+    const blog = await BlogModel.findById(blogID);
+    if (!blog) {
+      return res.status(404).json({
+        message: "Blog not found.",
+        data: [],
+      });
+    }
+
+    if (blog.owner.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        message: "You are not authorized to update this blog.",
+        data: [],
+      });
+    }
+
+    // Check if any field in the update is an array and handle it
+    const updateQuery = {};
+    for (const key in updateFields) {
+      if (Array.isArray(updateFields[key])) {
+        updateQuery.$push = updateQuery.$push || {};
+        updateQuery.$push[key] = { $each: updateFields[key] };
+      } else {
+        updateQuery.$set = updateQuery.$set || {};
+        updateQuery.$set[key] = updateFields[key];
+      }
+    }
+
+    const updatedBlog = await BlogModel.findByIdAndUpdate(
+      blogID,
+      updateQuery,
+      { new: true } // Return the updated document
+    );
+
+    if (!updatedBlog) {
+      return res.status(404).json({
+        message: "Blog not found.",
+        data: [],
+      });
+    }
+
+    logger.debug("Blog updated successfully");
+    res.status(200).json({
+      message: "Blog updated successfully",
+      data: updatedBlog,
+    });
   } catch (error) {
     logger.error(error.message);
     res.status(400).json({
@@ -209,6 +201,14 @@ const updateBlog = async (req, res) => {
 const deleteBlog = async (req, res) => {
   try {
     const blogID = req.params.id;
+
+    if (blog.owner.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        message: "You are not authorized to delete this blog.",
+        data: [],
+      });
+    }
+
     const deleteBlog = await BlogModel.findByIdAndDelete(blogID);
 
     if (!deleteBlog) {

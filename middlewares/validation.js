@@ -13,7 +13,7 @@ const getCookie = async (req, res, next) => {
 
       next();
     } catch (error) {
-      console.log(error.message);
+      logger.error(error.message);
       res.redirect("login");
     }
   } else {
@@ -26,7 +26,7 @@ const bearerTokenAuth = async (req, res, next) => {
     const authHeader = req.headers;
 
     if (!authHeader.authorization) {
-      res.status(401).json({
+      return res.status(401).json({
         message: "You are not authorized!",
       });
     }
@@ -38,7 +38,7 @@ const bearerTokenAuth = async (req, res, next) => {
     const user = await UserModel.findOne({ _id: decoded._id }); // checking the user id against records in db
 
     if (!user) {
-      res.status(401).json({
+      return res.status(401).json({
         message: "You are not authorized!", // handling error in not found cases
       });
     }
@@ -47,7 +47,7 @@ const bearerTokenAuth = async (req, res, next) => {
 
     next();
   } catch (error) {
-    res.status(400).json({
+    return res.status(400).json({
       message: error.message,
       data: [],
     });

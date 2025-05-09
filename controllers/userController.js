@@ -1,3 +1,4 @@
+const logger = require("../logger");
 const UserModel = require("../models/userModel");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
@@ -8,9 +9,8 @@ const loginUser = async (req, res) => {
     const userLoginDetail = req.body;
 
     const user = await UserModel.findOne({ email: userLoginDetail.email }); // checking db for user provided email address
-
     if (!user) {
-      res.status(404).json({
+      return res.status(404).json({
         message: "User not found.", // handling error if email is not found.
       });
     }
@@ -18,8 +18,8 @@ const loginUser = async (req, res) => {
     const userPassword = await user.isValidPassword(userLoginDetail.password); // unhashing password and comparing with one in the db
 
     if (!userPassword) {
-      res.status(404).json({
-        message: "Email or passwor not correct!", // handling error if password is not found.
+      return res.status(404).json({
+        message: "Email or password not correct!", // handling error if password is not found.
       });
     }
 
@@ -35,7 +35,8 @@ const loginUser = async (req, res) => {
       token,
     });
   } catch (error) {
-    res.status(500).json({
+    logger.error("Login user route || Error event ", error.message);
+    return res.status(500).json({
       message: "Server Error",
       err: error.message,
       data: null,
@@ -47,7 +48,6 @@ const loginUser = async (req, res) => {
 const createUser = async (req, res) => {
   try {
     const newUserInput = req.body;
-    console.log(newUserInput);
 
     const existingUser = await UserModel.findOne({
       // checking if user already exist
@@ -64,26 +64,27 @@ const createUser = async (req, res) => {
       // creating user into mongoDB database
       firstname: newUserInput.firstname,
       lastname: newUserInput.lastname,
+      username: newUserInput.username,
       email: newUserInput.email,
       password: newUserInput.password,
     });
 
     const token = await jwt.sign(
-      { password: newUserObject.password, email: newUserObject.email },
+      { email: newUserObject.email },
       process.env.JWT_SECRET, // signing JWTs
       { expiresIn: "1h" }
     );
 
     // set cookie
-    res.cookie("jwt", token);
+    res.cookie("jwt", token, { httpOnly: true, secure: true });
 
     return res.status(201).json({
       message: "User created successfully", // success message
-      newUserObject,
-      token,
+      user: newUserObject,
+      data: token,
     });
   } catch (error) {
-    res.status(500).json({
+    return res.status(500).json({
       message: "Server Error", // returning error if create user operation failed.
       err: error.message,
     });
