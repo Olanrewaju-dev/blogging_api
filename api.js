@@ -11,7 +11,7 @@ const blogRouter = require("./routes/blogRoute");
 
 db.connectToMongoDB();
 
-const port = 3001 || process.env.PORT;
+const port = process.env.PORT;
 
 //// app use
 app.use(express.json()); // parse application/json
